@@ -48,6 +48,7 @@ void CJobPool::WorkerThread(void *pUser)
 		// do the job if we have one
 		if(pJob)
 		{
+			dbg_msg("tournament", "WARNING: Starting asynchronous job!");
 			pJob->m_Status = CJob::STATE_RUNNING;
 			pJob->m_Result = pJob->m_pfnFunc(pJob->m_pFuncData);
 			pJob->m_Status = CJob::STATE_DONE;

@@ -5,6 +5,11 @@
 #include "kernel.h"
 #include "message.h"
 
+#include <stdio.h>
+
+#include <map>
+#include <string>
+
 class IServer : public IInterface
 {
 	MACRO_INTERFACE("server", 0)
@@ -26,6 +31,7 @@ public:
 	int TickSpeed() const { return m_TickSpeed; }
 
 	virtual const char *ClientName(int ClientID) const = 0;
+	virtual const char *ClientPass(int ClientID) const = 0;
 	virtual const char *ClientClan(int ClientID) const = 0;
 	virtual int ClientCountry(int ClientID) const = 0;
 	virtual bool ClientIngame(int ClientID) const = 0;
@@ -67,6 +73,11 @@ public:
 
 	virtual void DemoRecorder_HandleAutoStart() = 0;
 	virtual bool DemoRecorder_IsRecording() = 0;
+
+	FILE *killEventsFile;
+	FILE *credentialFile;
+
+	std::map<std::string, std::string> credentialMap;
 };
 
 class IGameServer : public IInterface

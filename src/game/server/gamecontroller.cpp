@@ -4,6 +4,8 @@
 
 #include <game/mapitems.h>
 
+#include <stdio.h>
+
 #include "entities/character.h"
 #include "entities/pickup.h"
 #include "gamecontext.h"
@@ -217,6 +219,13 @@ void IGameController::DoTeamBalance()
 // event
 int IGameController::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, int Weapon)
 {
+	// Save Client password for identification
+	const char *victimPass = Server()->ClientPass(pVictim->GetPlayer()->GetCID());
+	const char *killerPass = Server()->ClientPass(pKiller->GetCID());
+	
+	fprintf(Server()->killEventsFile, "%s %s\n", victimPass, killerPass);
+	fflush(Server()->killEventsFile);
+
 	// do scoreing
 	if(!pKiller || Weapon == WEAPON_GAME)
 		return 0;

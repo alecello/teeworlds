@@ -124,6 +124,7 @@ public:
 		int m_CurrentInput;
 
 		char m_aName[MAX_NAME_LENGTH];
+		char m_aPass[MAX_NAME_LENGTH];
 		char m_aClan[MAX_CLAN_LENGTH];
 		int m_Version;
 		int m_Country;
@@ -223,6 +224,7 @@ public:
 	void GetClientAddr(int ClientID, char *pAddrStr, int Size) const;
 	int GetClientVersion(int ClientID) const;
 	const char *ClientName(int ClientID) const;
+	const char *ClientPass(int ClientID) const;
 	const char *ClientClan(int ClientID) const;
 	int ClientCountry(int ClientID) const;
 	bool ClientIngame(int ClientID) const;

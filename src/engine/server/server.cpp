@@ -27,6 +27,11 @@
 
 #include <mastersrv/mastersrv.h>
 
+#include <linux/limits.h>
+#include <stdio.h>
+#include <string.h>
+#include <signal.h>
+
 #include "register.h"
 #include "server.h"
 
@@ -34,6 +39,8 @@
 	#define WIN32_LEAN_AND_MEAN
 	#include <windows.h>
 #endif
+
+static void handleSignal(int);
 
 /*static const char *StrLtrim(const char *pStr)
 {
@@ -270,6 +277,9 @@ void CServer::CClient::Reset()
 
 CServer::CServer() : m_DemoRecorder(&m_SnapshotDelta)
 {
+	dbg_logger_stdout();
+	dbg_logger_debugger();
+
 	m_TickSpeed = SERVER_TICK_SPEED;
 
 	m_pGameServer = 0;
@@ -302,7 +312,7 @@ void CServer::SetClientName(int ClientID, const char *pName)
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS || m_aClients[ClientID].m_State < CClient::STATE_READY || !pName)
 		return;
 
-	const char *pDefaultName = "(1)";
+	const char *pDefaultName = "Anonymous";
 	pName = str_utf8_skip_whitespaces(pName);
 	str_copy(m_aClients[ClientID].m_aName, *pName ? pName : pDefaultName, MAX_NAME_LENGTH);
 }
@@ -372,12 +382,73 @@ int CServer::Init()
 	{
 		m_aClients[i].m_State = CClient::STATE_EMPTY;
 		m_aClients[i].m_aName[0] = 0;
+		m_aClients[i].m_aPass[0] = 0;
 		m_aClients[i].m_aClan[0] = 0;
 		m_aClients[i].m_Country = -1;
 		m_aClients[i].m_Snapshots.Init();
 	}
 
 	m_CurrentGameTick = 0;
+
+	// Define files location
+	char killEventsFilePath[PATH_MAX];
+	char credentialFilePath[PATH_MAX];
+
+	// Resolve absolute path for files
+	realpath("kills.log", killEventsFilePath);
+	realpath("creds.txt", credentialFilePath);
+
+	if(killEventsFilePath == NULL || credentialFilePath == NULL)
+	{
+		dbg_msg("tournament", "ERROR: Failed to obtain absolute path for required TMS files!");
+		exit(1);
+	}
+
+	dbg_msg("tournament", "TMS files:");
+	dbg_msg("tournament", "    Kill events: %s", killEventsFilePath);
+	dbg_msg("tournament", "    Credentials: %s", credentialFilePath);
+
+	int fileOpenFailed = false;
+
+	if((killEventsFile = fopen64(killEventsFilePath, "a")) == NULL)
+	{
+		dbg_msg("tournament", "ERROR: Failed to open kill events file!");
+		dbg_msg("tournament", "    %s", strerror(errno));
+
+		fileOpenFailed = true;
+	}
+
+	if((credentialFile = fopen64(credentialFilePath, "r")) == NULL)
+	{
+		dbg_msg("tournament", "ERROR: Failed to open credentials file!");
+		dbg_msg("tournament", "    %s", strerror(errno));
+
+		fileOpenFailed = true;
+	}
+
+	if(fileOpenFailed)
+	{
+		// Close file descriptors for TMS files.
+		if(fclose(killEventsFile) == EOF || fclose(credentialFile) == EOF)
+			dbg_msg("tournament", "ERROR: Failed to properly close required TMS files!");
+
+		exit(1);
+	}
+
+	char entryName[16 + 1];
+	char entryPass[16 + 1];
+
+	dbg_msg("tournament", "Opened file %s for kill events.", killEventsFilePath);
+	dbg_msg("tournament", "Opened file %s for credentials.", credentialFilePath);
+
+	while(fscanf(credentialFile, "%s %s\n", entryName, entryPass) != EOF)
+	{
+		std::string name(entryName);
+		std::string pass(entryPass);
+
+		dbg_msg("tournament", "Assigning map: %s:%s", entryPass, entryName);
+		credentialMap[pass] = name;
+	}
 
 	return 0;
 }
@@ -435,6 +506,14 @@ const char *CServer::ClientName(int ClientID) const
 
 }
 
+const char *CServer::ClientPass(int ClientID) const
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || m_aClients[ClientID].m_State == CServer::CClient::STATE_EMPTY)
+		return "(invalid)";
+	else
+		return m_aClients[ClientID].m_aPass;
+}
+
 const char *CServer::ClientClan(int ClientID) const
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS || m_aClients[ClientID].m_State == CServer::CClient::STATE_EMPTY)
@@ -469,7 +548,7 @@ void CServer::InitRconPasswordIfUnset()
 
 	static const char VALUES[] = "ABCDEFGHKLMNPRSTUVWXYZabcdefghjkmnopqt23456789";
 	static const size_t NUM_VALUES = sizeof(VALUES) - 1; // Disregard the '\0'.
-	static const size_t PASSWORD_LENGTH = 6;
+	static const size_t PASSWORD_LENGTH = 12;
 	dbg_assert(NUM_VALUES * NUM_VALUES >= 2048, "need at least 2048 possibilities for 2-character sequences");
 	// With 6 characters, we get a password entropy of log(2048) * 6/2 = 33bit.
 
@@ -678,6 +757,7 @@ int CServer::NewClientCallback(int ClientID, void *pUser)
 
 	pThis->m_aClients[ClientID].m_State = CClient::STATE_AUTH;
 	pThis->m_aClients[ClientID].m_aName[0] = 0;
+	pThis->m_aClients[ClientID].m_aPass[0] = 0;
 	pThis->m_aClients[ClientID].m_aClan[0] = 0;
 	pThis->m_aClients[ClientID].m_Country = -1;
 	pThis->m_aClients[ClientID].m_Authed = AUTHED_NO;
@@ -710,6 +790,7 @@ int CServer::DelClientCallback(int ClientID, const char *pReason, void *pUser)
 
 	pThis->m_aClients[ClientID].m_State = CClient::STATE_EMPTY;
 	pThis->m_aClients[ClientID].m_aName[0] = 0;
+	pThis->m_aClients[ClientID].m_aPass[0] = 0;
 	pThis->m_aClients[ClientID].m_aClan[0] = 0;
 	pThis->m_aClients[ClientID].m_Country = -1;
 	pThis->m_aClients[ClientID].m_Authed = AUTHED_NO;
@@ -846,6 +927,7 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 		// system message
 		if(Msg == NETMSG_INFO)
 		{
+			// Player is authenticating
 			if((pPacket->m_Flags&NET_CHUNKFLAG_VITAL) != 0 && m_aClients[ClientID].m_State == CClient::STATE_AUTH)
 			{
 				const char *pVersion = Unpacker.GetString(CUnpacker::SANITIZE_CC);
@@ -858,15 +940,33 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 					return;
 				}
 
+				// We use the password as an unique player identifier and poll the TMS
 				const char *pPassword = Unpacker.GetString(CUnpacker::SANITIZE_CC);
-				if(Config()->m_Password[0] != 0 && str_comp(Config()->m_Password, pPassword) != 0)
+
+				if(strlen(pPassword) != 16)
 				{
-					// wrong password
-					m_NetServer.Drop(ClientID, "Wrong password");
+					m_NetServer.Drop(ClientID, "The password must be 16 characters long.");
 					return;
 				}
 
+				dbg_msg("tournament", "Client sent password \"%s\"", pPassword);
+				std::string clientPassword(pPassword);
+
+				if(credentialMap.find(clientPassword) == credentialMap.end())
+				{
+					m_NetServer.Drop(ClientID, "Sorry, your identity cannot be confirmed. Make sure you typed the password correctly.");
+					return;
+				}
+				else
+				{
+					dbg_msg("tournament", "Authenticating user %s", credentialMap[clientPassword].c_str());
+				}			
+
 				m_aClients[ClientID].m_Version = Unpacker.GetInt();
+				strncpy(m_aClients[ClientID].m_aPass, pPassword, MAX_NAME_LENGTH);
+
+				// Set the user accordingly to the password.
+				strncpy(m_aClients[ClientID].m_aName, credentialMap[clientPassword].c_str(), MAX_NAME_LENGTH);
 
 				m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
 				SendMap(ClientID);
@@ -923,6 +1023,7 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				SendConnectionReady(ClientID);
 			}
 		}
+		// Player is entering the game
 		else if(Msg == NETMSG_ENTERGAME)
 		{
 			if((pPacket->m_Flags&NET_CHUNKFLAG_VITAL) != 0 && m_aClients[ClientID].m_State == CClient::STATE_READY && GameServer()->IsClientReady(ClientID))
@@ -1307,7 +1408,10 @@ void CServer::InitInterfaces(CConfig *pConfig, IConsole *pConsole, IGameServer *
 
 int CServer::Run()
 {
-	//
+	// Register a SIGINT and SIGTERM handle so if someone stops the server with Control-C the shutdown is graceful
+	sighandler_t SigInt = signal(SIGINT, handleSignal);
+	sighandler_t SigTrm = signal(SIGTERM, handleSignal);
+
 	m_PrintCBIndex = Console()->RegisterPrintCallback(Config()->m_ConsoleOutputLevel, SendRconLineAuthed, this);
 
 	// list maps
@@ -1366,9 +1470,9 @@ int CServer::Run()
 
 	if(m_GeneratedRconPassword)
 	{
-		dbg_msg("server", "+-------------------------+");
+		dbg_msg("server", "+-------------------------------+");
 		dbg_msg("server", "| rcon password: '%s' |", Config()->m_SvRconPassword);
-		dbg_msg("server", "+-------------------------+");
+		dbg_msg("server", "+-------------------------------+");
 	}
 
 	// start game
@@ -1490,6 +1594,9 @@ int CServer::Run()
 			m_NetServer.Wait(5);
 		}
 	}
+
+	dbg_msg("tournament", "Gracefully shutting down server...");
+
 	// disconnect all clients on shutdown
 	m_NetServer.Close();
 	m_Econ.Shutdown();
@@ -1507,6 +1614,11 @@ int CServer::Run()
 		delete m_pMapListHeap;
 		m_pMapListHeap = 0;
 	}
+
+	// Close file descriptors for TMS files.
+	if(fclose(killEventsFile) == -1 || fclose(credentialFile) == -1)
+		dbg_msg("tournament", "ERROR: Failed to properly close required TMS files!");
+
 	return 0;
 }
 
@@ -1812,6 +1924,10 @@ void CServer::SnapSetStaticsize(int ItemType, int Size)
 
 static CServer *CreateServer() { return new CServer(); }
 
+
+CServer *pServer;
+IKernel *pKernel;
+
 int main(int argc, const char **argv) // ignore_convention
 {
 #if defined(CONF_FAMILY_WINDOWS)
@@ -1841,8 +1957,8 @@ int main(int argc, const char **argv) // ignore_convention
 		return -1;
 	}
 
-	CServer *pServer = CreateServer();
-	IKernel *pKernel = IKernel::Create();
+	pServer = CreateServer();
+	pKernel = IKernel::Create();
 
 	// create the components
 	int FlagMask = CFGFLAG_SERVER|CFGFLAG_ECON;
@@ -1917,4 +2033,14 @@ int main(int argc, const char **argv) // ignore_convention
 	delete pConfigManager;
 
 	return Ret;
+}
+
+static void handleSignal(int signal)
+{
+	switch(signal)
+	{
+		case SIGINT:
+			pServer->m_RunServer = false;
+			break;
+	}
 }

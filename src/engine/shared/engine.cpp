@@ -51,10 +51,7 @@ public:
 	CEngine(const char *pAppname)
 	{
 		srand(time_get());
-		dbg_logger_stdout();
-		dbg_logger_debugger();
 
-		//
 		dbg_msg("engine", "running on %s-%s-%s", CONF_FAMILY_STRING, CONF_PLATFORM_STRING, CONF_ARCH_STRING);
 	#ifdef CONF_ARCH_ENDIAN_LITTLE
 		dbg_msg("engine", "arch is little endian");

@@ -1112,8 +1112,9 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 			CNetMsg_Cl_StartInfo *pMsg = (CNetMsg_Cl_StartInfo *)pRawMsg;
 			pPlayer->m_LastChangeInfo = Server()->Tick();
 
-			// set start infos
-			Server()->SetClientName(ClientID, pMsg->m_pName);
+			// Do NOT set the ClientName: it's already set in the password stage.
+			// Server()->SetClientName(ClientID, pMsg->m_pName);
+
 			Server()->SetClientClan(ClientID, pMsg->m_pClan);
 			Server()->SetClientCountry(ClientID, pMsg->m_Country);
 
