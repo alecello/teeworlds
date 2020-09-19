@@ -5,6 +5,8 @@
 #include <game/mapitems.h>
 
 #include <stdio.h>
+#include <string.h>
+#include <signal.h>
 
 #include "entities/character.h"
 #include "entities/pickup.h"
@@ -1107,6 +1109,17 @@ bool IGameController::GetStartRespawnState() const
 // team
 bool IGameController::CanChangeTeam(CPlayer *pPlayer, int JoinTeam) const
 {
+	// If the player joined with the special spectator account, disallow them from getting into spectator mode
+	const char *pPassword = Server()->ClientPass(pPlayer->GetCID());
+	const char *sPassword = Server()->spectatorPassword;
+
+	if(strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
+		return false;
+
+	// If the player is part of the tournament, disallow them from getting into spectator mode
+	if(JoinTeam == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
+		return false;
+
 	if(!IsTeamplay() || JoinTeam == TEAM_SPECTATORS || !Config()->m_SvTeambalanceTime)
 		return true;
 
@@ -1122,6 +1135,17 @@ bool IGameController::CanChangeTeam(CPlayer *pPlayer, int JoinTeam) const
 
 bool IGameController::CanJoinTeam(int Team, int NotThisID) const
 {
+	// If the player joined with the special spectator account, disallow them from getting into spectator mode
+	const char *pPassword = Server()->ClientPass(NotThisID);
+	const char *sPassword = Server()->spectatorPassword;
+
+	if(strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
+		return false;
+
+	// If the player is part of the tournament, disallow them from getting into spectator mode
+	if(Team == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
+		return false;
+
 	if(Team == TEAM_SPECTATORS)
 		return true;
 
@@ -1141,6 +1165,16 @@ int IGameController::ClampTeam(int Team) const
 
 void IGameController::DoTeamChange(CPlayer *pPlayer, int Team, bool DoChatMsg)
 {
+	// If the player joined with the special spectator account, disallow them from getting into spectator mode
+	const char *pPassword = Server()->ClientPass(pPlayer->GetCID());
+	const char *sPassword = Server()->spectatorPassword;
+	if(strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
+		return;
+
+	// If the player is part of the tournament, disallow them from getting into spectator mode
+	if(Team == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
+		return;
+
 	Team = ClampTeam(Team);
 	if(Team == pPlayer->GetTeam())
 		return;

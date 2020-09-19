@@ -7,6 +7,8 @@
 #include "gamecontroller.h"
 #include "player.h"
 
+#include <string.h>
+
 
 MACRO_ALLOC_POOL_ID_IMPL(CPlayer, MAX_CLIENTS)
 
@@ -20,7 +22,15 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpe
 	m_ScoreStartTick = Server()->Tick();
 	m_pCharacter = 0;
 	m_ClientID = ClientID;
-	m_Team = AsSpec ? TEAM_SPECTATORS : GameServer()->m_pController->GetStartTeam();
+
+	// Enable joining as spectator using the spacial password
+	const char *pPassword = Server()->ClientPass(ClientID);
+	const char *sPassword = Server()->spectatorPassword;
+	if(strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
+		m_Team = TEAM_SPECTATORS;
+	else
+		m_Team = AsSpec ? TEAM_SPECTATORS : GameServer()->m_pController->GetStartTeam();
+	
 	m_SpecMode = SPEC_FREEVIEW;
 	m_SpectatorID = -1;
 	m_pSpecFlag = 0;

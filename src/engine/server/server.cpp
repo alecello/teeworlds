@@ -309,7 +309,7 @@ CServer::CServer() : m_DemoRecorder(&m_SnapshotDelta)
 
 void CServer::SetClientName(int ClientID, const char *pName)
 {
-	if(ClientID < 0 || ClientID >= MAX_CLIENTS || m_aClients[ClientID].m_State < CClient::STATE_READY || !pName || m_aClients[ClientID].m_aName[0] != 0)
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || m_aClients[ClientID].m_State < CClient::STATE_AUTH || !pName || m_aClients[ClientID].m_aName[0] != 0)
 		return;
 
 	const char *pDefaultName = "Anonymous";
@@ -378,6 +378,8 @@ int64 CServer::TickStartTime(int Tick)
 
 int CServer::Init()
 {
+	spectatorPassword = "spectator";
+	
 	for(int i = 0; i < MAX_CLIENTS; i++)
 	{
 		m_aClients[i].m_State = CClient::STATE_EMPTY;
@@ -437,20 +439,29 @@ int CServer::Init()
 		exit(1);
 	}
 
-	char entryName[16 + 1];
-	char entryPass[16 + 1];
+	char entryName[MAX_NAME_LENGTH];
+	char entryPass[MAX_NAME_LENGTH];
 
 	dbg_msg("tournament", "Opened file %s for kill events.", killEventsFilePath);
 	dbg_msg("tournament", "Opened file %s for credentials.", credentialFilePath);
 
-	while(fscanf(credentialFile, "%s %s\n", entryName, entryPass) != EOF)
+	int count = 0;
+
+	while(fscanf(credentialFile, "%s %[^\n]s\n", entryPass, entryName) != EOF)
 	{
 		std::string name(entryName);
 		std::string pass(entryPass);
 
-		dbg_msg("tournament", "Assigning map: %s:%s", entryPass, entryName);
+		dbg_msg("tournament", "Assigning map: %s : [%s]", entryPass, entryName);
 		credentialMap[pass] = name;
+		count++;
 	}
+
+	// Add special map for spectators
+	dbg_msg("tournament", "Assigning special spectator map: %s : [spectator]", spectatorPassword);
+	credentialMap[spectatorPassword] = "spectator";
+
+	dbg_msg("tournament", "Added %d mappings from file and one spectator mapping for a total of %d mappings", count, (count + 1));
 
 	return 0;
 }
@@ -945,13 +956,19 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				// We use the password as an unique player identifier and poll the TMS
 				const char *pPassword = Unpacker.GetString(CUnpacker::SANITIZE_CC);
 
-				if(strlen(pPassword) != 16)
+				// Check for spectators
+				int isSpecator = false;
+				if(strlen(pPassword) == strlen(spectatorPassword) && strcmp(pPassword, spectatorPassword) == 0)
+					isSpecator = true;
+
+				if(strlen(pPassword) != (MAX_NAME_LENGTH - 1) && !isSpecator)
 				{
-					m_NetServer.Drop(ClientID, "The password must be 16 characters long.");
+					char aReason[256];
+					str_format(aReason, sizeof(aReason), "The password must be %d characters long.", (MAX_NAME_LENGTH - 1));
+					m_NetServer.Drop(ClientID, aReason);
 					return;
 				}
 
-				dbg_msg("tournament", "Client sent password \"%s\"", pPassword);
 				std::string clientPassword(pPassword);
 
 				if(credentialMap.find(clientPassword) == credentialMap.end())
@@ -961,14 +978,15 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				}
 				else
 				{
-					dbg_msg("tournament", "Authenticating user %s", credentialMap[clientPassword].c_str());
+					dbg_msg("tournament", "Authenticating user \"%s\"", credentialMap[clientPassword].c_str());
 				}			
 
 				m_aClients[ClientID].m_Version = Unpacker.GetInt();
 				strncpy(m_aClients[ClientID].m_aPass, pPassword, MAX_NAME_LENGTH);
 
 				// Set the user accordingly to the password.
-				strncpy(m_aClients[ClientID].m_aName, credentialMap[clientPassword].c_str(), MAX_NAME_LENGTH);
+				const char *pName = strdup(credentialMap[clientPassword].c_str());
+				SetClientName(ClientID, pName);
 
 				m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
 				SendMap(ClientID);
@@ -1413,6 +1431,8 @@ int CServer::Run()
 	// Register a SIGINT and SIGTERM handle so if someone stops the server with Control-C the shutdown is graceful
 	signal(SIGINT, handleSignal);
 	signal(SIGTERM, handleSignal);
+	signal(SIGHUP, handleSignal);
+
 
 	m_PrintCBIndex = Console()->RegisterPrintCallback(Config()->m_ConsoleOutputLevel, SendRconLineAuthed, this);
 
@@ -2043,6 +2063,7 @@ static void handleSignal(int signal)
 	{
 		case SIGINT:
 		case SIGTERM:
+		case SIGHUP:
 			pServer->m_RunServer = false;
 			break;
 	}

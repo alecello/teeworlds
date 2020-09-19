@@ -77,6 +77,8 @@ public:
 	FILE *killEventsFile;
 	FILE *credentialFile;
 
+	const char *spectatorPassword;
+
 	std::map<std::string, std::string> credentialMap;
 };
 
