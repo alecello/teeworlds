@@ -309,7 +309,7 @@ CServer::CServer() : m_DemoRecorder(&m_SnapshotDelta)
 
 void CServer::SetClientName(int ClientID, const char *pName)
 {
-	if(ClientID < 0 || ClientID >= MAX_CLIENTS || m_aClients[ClientID].m_State < CClient::STATE_READY || !pName)
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS || m_aClients[ClientID].m_State < CClient::STATE_READY || !pName || m_aClients[ClientID].m_aName[0] != 0)
 		return;
 
 	const char *pDefaultName = "Anonymous";
@@ -428,9 +428,11 @@ int CServer::Init()
 
 	if(fileOpenFailed)
 	{
-		// Close file descriptors for TMS files.
-		if(fclose(killEventsFile) == EOF || fclose(credentialFile) == EOF)
-			dbg_msg("tournament", "ERROR: Failed to properly close required TMS files!");
+		if(killEventsFile != NULL && fclose(killEventsFile) == EOF)
+			dbg_msg("tournament", "ERROR: Failed to properly close kill events file!");
+
+		if(credentialFile != NULL && fclose(credentialFile) == EOF)
+			dbg_msg("tournament", "ERROR: Failed to properly close credentials file!");
 
 		exit(1);
 	}
@@ -1409,8 +1411,8 @@ void CServer::InitInterfaces(CConfig *pConfig, IConsole *pConsole, IGameServer *
 int CServer::Run()
 {
 	// Register a SIGINT and SIGTERM handle so if someone stops the server with Control-C the shutdown is graceful
-	sighandler_t SigInt = signal(SIGINT, handleSignal);
-	sighandler_t SigTrm = signal(SIGTERM, handleSignal);
+	signal(SIGINT, handleSignal);
+	signal(SIGTERM, handleSignal);
 
 	m_PrintCBIndex = Console()->RegisterPrintCallback(Config()->m_ConsoleOutputLevel, SendRconLineAuthed, this);
 
@@ -2040,6 +2042,7 @@ static void handleSignal(int signal)
 	switch(signal)
 	{
 		case SIGINT:
+		case SIGTERM:
 			pServer->m_RunServer = false;
 			break;
 	}
