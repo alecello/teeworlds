@@ -2,6 +2,8 @@
     <img src="https://repology.org/badge/vertical-allrepos/teeworlds.svg" alt="Packaging status" align="right">
 </a>
 
+> NOTE: This fork contains a **modified** copy of the original source code. This modification is not affiliated in any way with the original authors and is not intended for merge, but rather to have the game interact with some external programs in order to more easily manage a Teeworlds tournament.
+
 Teeworlds ![GitHub Actions](https://github.com/teeworlds/teeworlds/workflows/Build/badge.svg)
 =========
 
