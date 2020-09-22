@@ -132,8 +132,9 @@ public:
 		int m_Authed;
 		int m_AuthTries;
 
-		// Is the client an admin?
+		// Is the client an admin or spectator?
 		int m_isAdmin;
+		int m_isSpectator;
 
 		int m_MapChunk;
 		bool m_NoRconNote;

@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
+#include <time.h>
 
 #include "entities/character.h"
 #include "entities/pickup.h"
@@ -229,7 +230,8 @@ int IGameController::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, int
 	// Also check that both passwords are valid just in case
 	if(m_GameState == IGS_GAME_RUNNING && strlen(victimPass) == (MAX_NAME_LENGTH - 1) && strlen(killerPass) == (MAX_NAME_LENGTH - 1))
 	{
-		fprintf(Server()->killEventsFile, "%s %s\n", victimPass, killerPass);
+		// The actual meaning of the return value of time() and the size of the value, but long long (64 bit integer) should be good
+		fprintf(Server()->killEventsFile, "%llu %s %s\n", (long long unsigned int) time(NULL), victimPass, killerPass);
 		fflush(Server()->killEventsFile);
 	}
 
@@ -656,6 +658,22 @@ void IGameController::StartMatch()
 		SetGameState(IGS_START_COUNTDOWN);
 	else
 		SetGameState(IGS_WARMUP_GAME, TIMER_INFINITE);
+
+	Server()->DemoRecorder_HandleAutoStart();
+	char aBuf[256];
+	str_format(aBuf, sizeof(aBuf), "start match type='%s' teamplay='%d'", m_pGameType, m_GameFlags&GAMEFLAG_TEAMS);
+	GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
+}
+
+void IGameController::ForceStartMatch()
+{
+	ResetGame();
+
+	m_RoundCount = 0;
+	m_aTeamscore[TEAM_RED] = 0;
+	m_aTeamscore[TEAM_BLUE] = 0;
+
+	SetGameState(IGS_START_COUNTDOWN);
 
 	Server()->DemoRecorder_HandleAutoStart();
 	char aBuf[256];

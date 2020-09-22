@@ -389,6 +389,7 @@ int CServer::Init()
 		m_aClients[i].m_Snapshots.Init();
 
 		m_aClients[i].m_isAdmin = false;
+		m_aClients[i].m_isSpectator = false;
 	}
 
 	m_CurrentGameTick = 0;
@@ -817,6 +818,7 @@ int CServer::NewClientCallback(int ClientID, void *pUser)
 	pThis->m_aClients[ClientID].m_Quitting = false;
 
 	pThis->m_aClients[ClientID].m_isAdmin = false;
+	pThis->m_aClients[ClientID].m_isSpectator = false;
 
 	pThis->m_aClients[ClientID].Reset();
 
@@ -853,6 +855,7 @@ int CServer::DelClientCallback(int ClientID, const char *pReason, void *pUser)
 	pThis->m_aClients[ClientID].m_Quitting = false;
 
 	pThis->m_aClients[ClientID].m_isAdmin = false;
+	pThis->m_aClients[ClientID].m_isSpectator = false;
 
 	pThis->m_aClients[ClientID].m_Snapshots.PurgeAll();
 	return 0;
@@ -997,18 +1000,32 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 
 				// We use the password as an unique player identifier and poll the TMS
 				const char *pPassword = Unpacker.GetString(CUnpacker::SANITIZE_CC);
+				size_t passwordLength = strlen(pPassword);
 
 				// Check for spectators
 				int isSpecator = false;
-				if(strlen(pPassword) == strlen(spectatorPassword) && strcmp(pPassword, spectatorPassword) == 0)
+				if(passwordLength == strlen(spectatorPassword) && strcmp(pPassword, spectatorPassword) == 0)
 					isSpecator = true;
 
-				if(strlen(pPassword) != (MAX_NAME_LENGTH - 1) && !isSpecator)
+				if(passwordLength != (MAX_NAME_LENGTH - 1) && !isSpecator)
 				{
 					char aReason[256];
 					str_format(aReason, sizeof(aReason), "The password must be %d characters long.", (MAX_NAME_LENGTH - 1));
 					m_NetServer.Drop(ClientID, aReason);
 					return;
+				}
+
+				if(!isSpecator)
+				{
+					// Check taht the player is not already in the server
+					for(int i = 0; i < MAX_CLIENTS; ++i)
+					{
+						if(!m_aClients[i].m_isSpectator && m_aClients[i].m_State > CClient::STATE_AUTH && strcmp(m_aClients[i].m_aPass, pPassword) == 0)
+						{
+							m_NetServer.Drop(ClientID, "You are already logged into this server.");
+							return;
+						}
+					}
 				}
 
 				std::string clientPassword(pPassword);
@@ -1039,6 +1056,8 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				SetClientName(ClientID, pName);
 
 				m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
+				m_aClients[ClientID].m_isSpectator = isSpecator ? true : false;
+
 				SendMap(ClientID);
 			}
 		}

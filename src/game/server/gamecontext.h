@@ -46,6 +46,7 @@ class CGameContext : public IGameServer
 
 	static void ConTuneParam(IConsole::IResult *pResult, void *pUserData);
 	static void ConTuneReset(IConsole::IResult *pResult, void *pUserData);
+	static void ConStartMatch(IConsole::IResult *pResult, void *pUserData);
 	static void ConTunes(IConsole::IResult *pResult, void *pUserData);
 	static void ConPause(IConsole::IResult *pResult, void *pUserData);
 	static void ConChangeMap(IConsole::IResult *pResult, void *pUserData);

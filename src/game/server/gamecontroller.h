@@ -125,6 +125,8 @@ protected:
 	void UpdateGameInfo(int ClientID);
 
 public:
+	void ForceStartMatch();
+
 	IGameController(class CGameContext *pGameServer);
 	virtual ~IGameController() {};
 

@@ -1185,6 +1185,12 @@ void CGameContext::ConTuneReset(IConsole::IResult *pResult, void *pUserData)
 	pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "tuning", "Tuning reset");
 }
 
+void CGameContext::ConStartMatch(IConsole::IResult *pResult, void *pUserData)
+{
+	CGameContext *pSelf = (CGameContext *) pUserData;
+	pSelf->m_pController->ForceStartMatch();
+}
+
 void CGameContext::ConTunes(IConsole::IResult *pResult, void *pUserData)
 {
 	CGameContext *pSelf = (CGameContext *)pUserData;
@@ -1518,6 +1524,9 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("tune", "s[tuning] i[value]", CFGFLAG_SERVER, ConTuneParam, this, "Tune variable to value");
 	Console()->Register("tune_reset", "", CFGFLAG_SERVER, ConTuneReset, this, "Reset all tuning variables to defaults");
 	Console()->Register("tunes", "", CFGFLAG_SERVER, ConTunes, this, "List all tuning variables and their values");
+
+	// Force the start of the match
+	Console()->Register("start", "", CFGFLAG_SERVER, ConStartMatch, this, "Force the start of the match");
 
 	Console()->Register("pause", "?i[seconds]", CFGFLAG_SERVER|CFGFLAG_STORE, ConPause, this, "Pause/unpause game");
 	Console()->Register("change_map", "?r[map]", CFGFLAG_SERVER|CFGFLAG_STORE, ConChangeMap, this, "Change map");
