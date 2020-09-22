@@ -26,7 +26,8 @@ CPlayer::CPlayer(CGameContext *pGameServer, int ClientID, bool Dummy, bool AsSpe
 	// Enable joining as spectator using the spacial password
 	const char *pPassword = Server()->ClientPass(ClientID);
 	const char *sPassword = Server()->spectatorPassword;
-	if(strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
+
+	if(Server()->IsAdmin(ClientID) || (strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0))
 		m_Team = TEAM_SPECTATORS;
 	else
 		m_Team = AsSpec ? TEAM_SPECTATORS : GameServer()->m_pController->GetStartTeam();

@@ -212,7 +212,7 @@ public:
 	bool GetStartRespawnState() const;
 
 	// team
-	bool CanJoinTeam(int Team, int NotThisID) const;
+	bool CanJoinTeam(int Team, int NotThisID, int Enforce) const;
 	bool CanChangeTeam(CPlayer *pPplayer, int JoinTeam) const;
 
 	void DoTeamChange(class CPlayer *pPlayer, int Team, bool DoChatMsg=true);

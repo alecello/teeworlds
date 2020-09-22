@@ -225,8 +225,13 @@ int IGameController::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, int
 	const char *victimPass = Server()->ClientPass(pVictim->GetPlayer()->GetCID());
 	const char *killerPass = Server()->ClientPass(pKiller->GetCID());
 	
-	fprintf(Server()->killEventsFile, "%s %s\n", victimPass, killerPass);
-	fflush(Server()->killEventsFile);
+	// Only count the kill if the game is running (we're not in the warmup phase or after the end of a match)
+	// Also check that both passwords are valid just in case
+	if(m_GameState == IGS_GAME_RUNNING && strlen(victimPass) == (MAX_NAME_LENGTH - 1) && strlen(killerPass) == (MAX_NAME_LENGTH - 1))
+	{
+		fprintf(Server()->killEventsFile, "%s %s\n", victimPass, killerPass);
+		fflush(Server()->killEventsFile);
+	}
 
 	// do scoreing
 	if(!pKiller || Weapon == WEAPON_GAME)
@@ -331,6 +336,7 @@ void IGameController::OnPlayerConnect(CPlayer *pPlayer)
 
 	// update game info
 	UpdateGameInfo(ClientID);
+	GameServer()->SendBroadcast("Benvenuto al torneo di Teeworlds in occasione del Linux Day 2020!", ClientID);
 }
 
 void IGameController::OnPlayerDisconnect(CPlayer *pPlayer)
@@ -1109,6 +1115,12 @@ bool IGameController::GetStartRespawnState() const
 // team
 bool IGameController::CanChangeTeam(CPlayer *pPlayer, int JoinTeam) const
 {
+	// If the player is an admin they can do whatever they want
+	if(Server()->IsAdmin(pPlayer->GetCID()))
+	{
+		return true;
+	}
+
 	// If the player joined with the special spectator account, disallow them from getting into spectator mode
 	const char *pPassword = Server()->ClientPass(pPlayer->GetCID());
 	const char *sPassword = Server()->spectatorPassword;
@@ -1133,17 +1145,19 @@ bool IGameController::CanChangeTeam(CPlayer *pPlayer, int JoinTeam) const
 	return aPlayerCount[JoinTeam]-aPlayerCount[JoinTeam^1] < NUM_TEAMS;
 }
 
-bool IGameController::CanJoinTeam(int Team, int NotThisID) const
+bool IGameController::CanJoinTeam(int Team, int NotThisID, int Enforce) const
 {
 	// If the player joined with the special spectator account, disallow them from getting into spectator mode
 	const char *pPassword = Server()->ClientPass(NotThisID);
 	const char *sPassword = Server()->spectatorPassword;
 
-	if(strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
+	int playerIsAdmin = Server()->IsAdmin(NotThisID);
+
+	if(!playerIsAdmin && !Enforce && strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
 		return false;
 
 	// If the player is part of the tournament, disallow them from getting into spectator mode
-	if(Team == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
+	if(!playerIsAdmin && !Enforce && Team == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
 		return false;
 
 	if(Team == TEAM_SPECTATORS)
@@ -1165,15 +1179,15 @@ int IGameController::ClampTeam(int Team) const
 
 void IGameController::DoTeamChange(CPlayer *pPlayer, int Team, bool DoChatMsg)
 {
-	// If the player joined with the special spectator account, disallow them from getting into spectator mode
-	const char *pPassword = Server()->ClientPass(pPlayer->GetCID());
-	const char *sPassword = Server()->spectatorPassword;
-	if(strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
-		return;
-
-	// If the player is part of the tournament, disallow them from getting into spectator mode
-	if(Team == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
-		return;
+	//// If the player joined with the special spectator account, disallow them from getting into spectator mode
+	//const char *pPassword = Server()->ClientPass(pPlayer->GetCID());
+	//const char *sPassword = Server()->spectatorPassword;
+	//if(strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
+	//	return;
+	//
+	//// If the player is part of the tournament, disallow them from getting into spectator mode
+	//if(Team == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
+	//	return;
 
 	Team = ClampTeam(Team);
 	if(Team == pPlayer->GetTeam())

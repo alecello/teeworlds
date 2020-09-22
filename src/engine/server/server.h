@@ -132,6 +132,9 @@ public:
 		int m_Authed;
 		int m_AuthTries;
 
+		// Is the client an admin?
+		int m_isAdmin;
+
 		int m_MapChunk;
 		bool m_NoRconNote;
 		bool m_Quitting;
@@ -223,6 +226,7 @@ public:
 	int GetClientInfo(int ClientID, CClientInfo *pInfo) const;
 	void GetClientAddr(int ClientID, char *pAddrStr, int Size) const;
 	int GetClientVersion(int ClientID) const;
+	int IsAdmin(int ClientID) const;
 	const char *ClientName(int ClientID) const;
 	const char *ClientPass(int ClientID) const;
 	const char *ClientClan(int ClientID) const;

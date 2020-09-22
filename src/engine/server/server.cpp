@@ -306,7 +306,6 @@ CServer::CServer() : m_DemoRecorder(&m_SnapshotDelta)
 	Init();
 }
 
-
 void CServer::SetClientName(int ClientID, const char *pName)
 {
 	if(ClientID < 0 || ClientID >= MAX_CLIENTS || m_aClients[ClientID].m_State < CClient::STATE_AUTH || !pName || m_aClients[ClientID].m_aName[0] != 0)
@@ -388,6 +387,8 @@ int CServer::Init()
 		m_aClients[i].m_aClan[0] = 0;
 		m_aClients[i].m_Country = -1;
 		m_aClients[i].m_Snapshots.Init();
+
+		m_aClients[i].m_isAdmin = false;
 	}
 
 	m_CurrentGameTick = 0;
@@ -395,12 +396,14 @@ int CServer::Init()
 	// Define files location
 	char killEventsFilePath[PATH_MAX];
 	char credentialFilePath[PATH_MAX];
+	char serverCrewFilePath[PATH_MAX];
 
 	// Resolve absolute path for files
 	realpath("kills.log", killEventsFilePath);
 	realpath("creds.txt", credentialFilePath);
+	realpath("admin.txt", serverCrewFilePath);
 
-	if(killEventsFilePath == NULL || credentialFilePath == NULL)
+	if(killEventsFilePath == NULL || credentialFilePath == NULL ||serverCrewFilePath == NULL)
 	{
 		dbg_msg("tournament", "ERROR: Failed to obtain absolute path for required TMS files!");
 		exit(1);
@@ -409,6 +412,7 @@ int CServer::Init()
 	dbg_msg("tournament", "TMS files:");
 	dbg_msg("tournament", "    Kill events: %s", killEventsFilePath);
 	dbg_msg("tournament", "    Credentials: %s", credentialFilePath);
+	dbg_msg("tournament", "    Server crew: %s", serverCrewFilePath);
 
 	int fileOpenFailed = false;
 
@@ -428,6 +432,14 @@ int CServer::Init()
 		fileOpenFailed = true;
 	}
 
+	if((serverCrewFile = fopen64(serverCrewFilePath, "r")) == NULL)
+	{
+		dbg_msg("tournament", "ERROR: Failed to open server crew file!");
+		dbg_msg("tournament", "    %s", strerror(errno));
+
+		fileOpenFailed = true;
+	}
+
 	if(fileOpenFailed)
 	{
 		if(killEventsFile != NULL && fclose(killEventsFile) == EOF)
@@ -435,6 +447,9 @@ int CServer::Init()
 
 		if(credentialFile != NULL && fclose(credentialFile) == EOF)
 			dbg_msg("tournament", "ERROR: Failed to properly close credentials file!");
+
+		if(serverCrewFile != NULL && fclose(serverCrewFile) == EOF)
+			dbg_msg("tournament", "ERROR: Failed to properly close server crew file!");
 
 		exit(1);
 	}
@@ -444,6 +459,7 @@ int CServer::Init()
 
 	dbg_msg("tournament", "Opened file %s for kill events.", killEventsFilePath);
 	dbg_msg("tournament", "Opened file %s for credentials.", credentialFilePath);
+	dbg_msg("tournament", "Opened file %s for server crew.", serverCrewFilePath);
 
 	int count = 0;
 
@@ -463,6 +479,18 @@ int CServer::Init()
 
 	dbg_msg("tournament", "Added %d mappings from file and one spectator mapping for a total of %d mappings", count, (count + 1));
 
+	while(fscanf(serverCrewFile, "%s\n", entryPass) != EOF)
+	{
+		std::string pass(entryPass);
+
+		if(credentialMap.find(pass) != credentialMap.end())
+		{
+			dbg_msg("tournament", "Adding administrator privileges for \"%s\"", credentialMap[pass].c_str());
+			admins.push_back(pass);
+		}
+	}
+
+	admins.shrink_to_fit();
 	return 0;
 }
 
@@ -517,6 +545,14 @@ const char *CServer::ClientName(int ClientID) const
 	else
 		return "(connecting)";
 
+}
+
+int CServer::IsAdmin(int ClientID) const
+{
+	if(ClientID < 0 || ClientID >= MAX_CLIENTS)
+		return false;
+
+	return m_aClients[ClientID].m_isAdmin;
 }
 
 const char *CServer::ClientPass(int ClientID) const
@@ -779,6 +815,9 @@ int CServer::NewClientCallback(int ClientID, void *pUser)
 	pThis->m_aClients[ClientID].m_pMapListEntryToSend = 0;
 	pThis->m_aClients[ClientID].m_NoRconNote = false;
 	pThis->m_aClients[ClientID].m_Quitting = false;
+
+	pThis->m_aClients[ClientID].m_isAdmin = false;
+
 	pThis->m_aClients[ClientID].Reset();
 
 	return 0;
@@ -812,6 +851,9 @@ int CServer::DelClientCallback(int ClientID, const char *pReason, void *pUser)
 	pThis->m_aClients[ClientID].m_pMapListEntryToSend = 0;
 	pThis->m_aClients[ClientID].m_NoRconNote = false;
 	pThis->m_aClients[ClientID].m_Quitting = false;
+
+	pThis->m_aClients[ClientID].m_isAdmin = false;
+
 	pThis->m_aClients[ClientID].m_Snapshots.PurgeAll();
 	return 0;
 }
@@ -979,7 +1021,15 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				else
 				{
 					dbg_msg("tournament", "Authenticating user \"%s\"", credentialMap[clientPassword].c_str());
-				}			
+				}
+
+				if(find(admins.begin(), admins.end(), clientPassword) != admins.end())
+				{
+					m_aClients[ClientID].m_isAdmin = true;
+					dbg_msg("tournament", "User \"%s\" is an administrator", credentialMap[clientPassword].c_str());
+				}
+				else
+					m_aClients[ClientID].m_isAdmin = false;
 
 				m_aClients[ClientID].m_Version = Unpacker.GetInt();
 				strncpy(m_aClients[ClientID].m_aPass, pPassword, MAX_NAME_LENGTH);

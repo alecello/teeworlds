@@ -8,7 +8,9 @@
 #include <stdio.h>
 
 #include <map>
+#include <vector>
 #include <string>
+#include <algorithm>
 
 class IServer : public IInterface
 {
@@ -30,6 +32,7 @@ public:
 	int Tick() const { return m_CurrentGameTick; }
 	int TickSpeed() const { return m_TickSpeed; }
 
+	virtual int IsAdmin(int ClientID) const = 0;
 	virtual const char *ClientName(int ClientID) const = 0;
 	virtual const char *ClientPass(int ClientID) const = 0;
 	virtual const char *ClientClan(int ClientID) const = 0;
@@ -76,10 +79,12 @@ public:
 
 	FILE *killEventsFile;
 	FILE *credentialFile;
+	FILE *serverCrewFile;
 
 	const char *spectatorPassword;
 
 	std::map<std::string, std::string> credentialMap;
+	std::vector<std::string> admins;
 };
 
 class IGameServer : public IInterface
