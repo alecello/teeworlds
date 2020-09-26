@@ -839,12 +839,9 @@ void CGameContext::OnMessage(int MsgID, CUnpacker *pUnpacker, int ClientID)
 
 			pPlayer->m_LastChat = Server()->Tick();
 
-			// don't allow spectators to disturb players during a running game in tournament mode
+			// don't allow spectators to disturb players
 			int Mode = pMsg->m_Mode;
-			if((Config()->m_SvTournamentMode == 2) &&
-				pPlayer->GetTeam() == TEAM_SPECTATORS &&
-				m_pController->IsGameRunning() &&
-				!Server()->IsAuthed(ClientID))
+			if(!Server()->IsAdmin(ClientID) && pPlayer->GetTeam() == TEAM_SPECTATORS)
 			{
 				if(Mode != CHAT_WHISPER)
 					Mode = CHAT_TEAM;
