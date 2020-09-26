@@ -17,6 +17,8 @@
 */
 class IGameController
 {
+	int serverFinishing;
+
 	class CGameContext *m_pGameServer;
 	class CConfig *m_pConfig;
 	class IServer *m_pServer;
@@ -126,6 +128,8 @@ protected:
 
 public:
 	void ForceStartMatch();
+	void ForceEndMatch();
+	void Finish();
 
 	IGameController(class CGameContext *pGameServer);
 	virtual ~IGameController() {};

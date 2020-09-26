@@ -1484,6 +1484,9 @@ void CGameContext::ConVote(IConsole::IResult *pResult, void *pUserData)
 	pSelf->Console()->Print(IConsole::OUTPUT_LEVEL_STANDARD, "server", aBuf);
 }
 
+void CGameContext::ConEndMatch(IConsole::IResult *pResult, void *pUserData) { ((CGameContext *) pUserData)->m_pController->ForceEndMatch(); }
+void CGameContext::ConFinish(IConsole::IResult *pResult, void *pUserData) { ((CGameContext *) pUserData)->m_pController->Finish(); }
+
 void CGameContext::ConchainSpecialMotdupdate(IConsole::IResult *pResult, void *pUserData, IConsole::FCommandCallback pfnCallback, void *pCallbackUserData)
 {
 	pfnCallback(pResult, pCallbackUserData);
@@ -1544,6 +1547,8 @@ void CGameContext::OnConsoleInit()
 	Console()->Register("remove_vote", "s[option]", CFGFLAG_SERVER, ConRemoveVote, this, "remove a voting option");
 	Console()->Register("clear_votes", "", CFGFLAG_SERVER, ConClearVotes, this, "Clears the voting options");
 	Console()->Register("vote", "r['yes'|'no']", CFGFLAG_SERVER, ConVote, this, "Force a vote to yes/no");
+	Console()->Register("end", "", CFGFLAG_SERVER, ConEndMatch, this, "Force end the current match");
+	Console()->Register("finish", "", CFGFLAG_SERVER, ConFinish, this, "Closes the server wating for the current match to end");
 }
 
 void CGameContext::NewCommandHook(const CCommandManager::CCommand *pCommand, void *pContext)

@@ -18,6 +18,8 @@
 
 IGameController::IGameController(CGameContext *pGameServer)
 {
+	serverFinishing = false;
+
 	m_pGameServer = pGameServer;
 	m_pConfig = m_pGameServer->Config();
 	m_pServer = m_pGameServer->Server();
@@ -681,6 +683,9 @@ void IGameController::ForceStartMatch()
 	GameServer()->Console()->Print(IConsole::OUTPUT_LEVEL_DEBUG, "game", aBuf);
 }
 
+void IGameController::ForceEndMatch() { SetGameState(IGS_END_MATCH, TIMER_END); }
+void IGameController::Finish() { serverFinishing = true; }
+
 void IGameController::StartRound()
 {
 	ResetGame();
@@ -801,6 +806,14 @@ void IGameController::Tick()
 				StartRound();
 				break;
 			case IGS_END_MATCH:
+				// If we're waiting to stop the server, do it now
+				// SIGINT will be caught and cause the server to stop the next tick
+				if(serverFinishing)
+				{
+					raise(SIGINT);
+					break;
+				}
+
 				// start next match
 				if(m_MatchCount >= m_GameInfo.m_MatchNum-1)
 					CycleMap();
