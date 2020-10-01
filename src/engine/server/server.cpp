@@ -1008,8 +1008,6 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 					pPassword[i] = tolower(input_pPassword[i]);
 				
 				pPassword[passwordLength] = 0;
-				
-				printf("PASSWORD: >>>%s<<<\n", pPassword);
 
 				// Check for spectators
 				int isSpecator = false;
