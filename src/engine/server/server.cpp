@@ -999,8 +999,17 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 				}
 
 				// We use the password as an unique player identifier and poll the TMS
-				const char *pPassword = Unpacker.GetString(CUnpacker::SANITIZE_CC);
-				size_t passwordLength = strlen(pPassword);
+				const char *input_pPassword = Unpacker.GetString(CUnpacker::SANITIZE_CC);
+				size_t passwordLength = strlen(input_pPassword);
+
+				char pPassword[passwordLength + 1];
+
+				for(int i = 0; i < (int) passwordLength; ++i)
+					pPassword[i] = tolower(input_pPassword[i]);
+				
+				pPassword[passwordLength] = 0;
+				
+				printf("PASSWORD: >>>%s<<<\n", pPassword);
 
 				// Check for spectators
 				int isSpecator = false;
