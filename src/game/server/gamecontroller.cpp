@@ -232,9 +232,12 @@ int IGameController::OnCharacterDeath(CCharacter *pVictim, CPlayer *pKiller, int
 	// Also check that both passwords are valid just in case
 	if(m_GameState == IGS_GAME_RUNNING && strlen(victimPass) == (MAX_NAME_LENGTH - 1) && strlen(killerPass) == (MAX_NAME_LENGTH - 1))
 	{
-		// The actual meaning of the return value of time() and the size of the value, but long long (64 bit integer) should be good
-		fprintf(Server()->killEventsFile, "%llu %s %s\n", (long long unsigned int) time(NULL), victimPass, killerPass);
-		fflush(Server()->killEventsFile);
+		if(Config()->m_Password[0] != 0)
+		{
+			// The actual meaning of the return value of time() and the size of the value, but long long (64 bit integer) should be good
+			fprintf(Server()->killEventsFile, "%llu %s %s\n", (long long unsigned int) time(NULL), victimPass, killerPass);
+			fflush(Server()->killEventsFile);
+		}
 	}
 
 	// do scoreing
@@ -1156,11 +1159,11 @@ bool IGameController::CanChangeTeam(CPlayer *pPlayer, int JoinTeam) const
 	const char *pPassword = Server()->ClientPass(pPlayer->GetCID());
 	const char *sPassword = Server()->spectatorPassword;
 
-	if(strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
+	if(Config()->m_Password[0] != 0 && strlen(pPassword) == strlen(sPassword) && strcmp(pPassword, sPassword) == 0)
 		return false;
 
 	// If the player is part of the tournament, disallow them from getting into spectator mode
-	if(JoinTeam == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
+	if(Config()->m_Password[0] != 0 && JoinTeam == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
 		return false;
 
 	if(!IsTeamplay() || JoinTeam == TEAM_SPECTATORS || !Config()->m_SvTeambalanceTime)
@@ -1188,7 +1191,7 @@ bool IGameController::CanJoinTeam(int Team, int NotThisID, int Enforce) const
 		return false;
 
 	// If the player is part of the tournament, disallow them from getting into spectator mode
-	if(!playerIsAdmin && !Enforce && Team == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
+	if(Config()->m_Password[0] != 0 && !playerIsAdmin && !Enforce && Team == TEAM_SPECTATORS && (strlen(pPassword) != strlen(sPassword) || strcmp(pPassword, sPassword) != 0))
 		return false;
 
 	if(Team == TEAM_SPECTATORS)

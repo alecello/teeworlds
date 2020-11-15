@@ -491,6 +491,9 @@ int CServer::Init()
 		}
 	}
 
+	fclose(serverCrewFile);
+	fclose(credentialFile);
+
 	admins.shrink_to_fit();
 	return 0;
 }
@@ -998,72 +1001,82 @@ void CServer::ProcessClientPacket(CNetChunk *pPacket)
 					return;
 				}
 
-				// We use the password as an unique player identifier and poll the TMS
-				const char *input_pPassword = Unpacker.GetString(CUnpacker::SANITIZE_CC);
-				size_t passwordLength = strlen(input_pPassword);
-
-				char pPassword[passwordLength + 1];
-
-				for(int i = 0; i < (int) passwordLength; ++i)
-					pPassword[i] = tolower(input_pPassword[i]);
-				
-				pPassword[passwordLength] = 0;
-
-				// Check for spectators
-				int isSpecator = false;
-				if(passwordLength == strlen(spectatorPassword) && strcmp(pPassword, spectatorPassword) == 0)
-					isSpecator = true;
-
-				if(passwordLength != (MAX_NAME_LENGTH - 1) && !isSpecator)
+				if(Config()->m_Password[0] != 0)
 				{
-					char aReason[256];
-					str_format(aReason, sizeof(aReason), "The password must be %d characters long.", (MAX_NAME_LENGTH - 1));
-					m_NetServer.Drop(ClientID, aReason);
-					return;
-				}
+					// We use the password as an unique player identifier and poll the TMS
+					const char *input_pPassword = Unpacker.GetString(CUnpacker::SANITIZE_CC);
+					size_t passwordLength = strlen(input_pPassword);
 
-				if(!isSpecator)
-				{
-					// Check taht the player is not already in the server
-					for(int i = 0; i < MAX_CLIENTS; ++i)
+					char pPassword[passwordLength + 1];
+
+					for(int i = 0; i < (int) passwordLength; ++i)
+						pPassword[i] = tolower(input_pPassword[i]);
+
+					pPassword[passwordLength] = 0;
+
+					// Check for spectators
+					int isSpecator = false;
+					if(passwordLength == strlen(spectatorPassword) && strcmp(pPassword, spectatorPassword) == 0)
+						isSpecator = true;
+
+					if(passwordLength != (MAX_NAME_LENGTH - 1) && !isSpecator)
 					{
-						if(!m_aClients[i].m_isSpectator && m_aClients[i].m_State > CClient::STATE_AUTH && strcmp(m_aClients[i].m_aPass, pPassword) == 0)
+						char aReason[256];
+						str_format(aReason, sizeof(aReason), "The password must be %d characters long.", (MAX_NAME_LENGTH - 1));
+						m_NetServer.Drop(ClientID, aReason);
+						return;
+					}
+
+					if(!isSpecator)
+					{
+						// Check taht the player is not already in the server
+						for(int i = 0; i < MAX_CLIENTS; ++i)
 						{
-							m_NetServer.Drop(ClientID, "You are already logged into this server.");
-							return;
+							if(!m_aClients[i].m_isSpectator && m_aClients[i].m_State > CClient::STATE_AUTH && strcmp(m_aClients[i].m_aPass, pPassword) == 0)
+							{
+								m_NetServer.Drop(ClientID, "You are already logged into this server.");
+								return;
+							}
 						}
 					}
-				}
 
-				std::string clientPassword(pPassword);
+					std::string clientPassword(pPassword);
 
-				if(credentialMap.find(clientPassword) == credentialMap.end())
-				{
-					m_NetServer.Drop(ClientID, "Sorry, your identity cannot be confirmed. Make sure you typed the password correctly.");
-					return;
+					if(credentialMap.find(clientPassword) == credentialMap.end())
+					{
+						m_NetServer.Drop(ClientID, "Sorry, your identity cannot be confirmed. Make sure you typed the password correctly.");
+						return;
+					}
+					else
+					{
+						dbg_msg("tournament", "Authenticating user \"%s\"", credentialMap[clientPassword].c_str());
+					}
+
+					if(find(admins.begin(), admins.end(), clientPassword) != admins.end())
+					{
+						m_aClients[ClientID].m_isAdmin = true;
+						dbg_msg("tournament", "User \"%s\" is an administrator", credentialMap[clientPassword].c_str());
+					}
+					else
+						m_aClients[ClientID].m_isAdmin = false;
+
+					m_aClients[ClientID].m_Version = Unpacker.GetInt();
+					strncpy(m_aClients[ClientID].m_aPass, pPassword, MAX_NAME_LENGTH);
+
+					// Set the user accordingly to the password.
+					const char *pName = strdup(credentialMap[clientPassword].c_str());
+					SetClientName(ClientID, pName);
+
+					m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
+					m_aClients[ClientID].m_isSpectator = isSpecator ? true : false;
 				}
 				else
 				{
-					dbg_msg("tournament", "Authenticating user \"%s\"", credentialMap[clientPassword].c_str());
-				}
-
-				if(find(admins.begin(), admins.end(), clientPassword) != admins.end())
-				{
-					m_aClients[ClientID].m_isAdmin = true;
-					dbg_msg("tournament", "User \"%s\" is an administrator", credentialMap[clientPassword].c_str());
-				}
-				else
+					m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
+					m_aClients[ClientID].m_isSpectator = false;
 					m_aClients[ClientID].m_isAdmin = false;
-
-				m_aClients[ClientID].m_Version = Unpacker.GetInt();
-				strncpy(m_aClients[ClientID].m_aPass, pPassword, MAX_NAME_LENGTH);
-
-				// Set the user accordingly to the password.
-				const char *pName = strdup(credentialMap[clientPassword].c_str());
-				SetClientName(ClientID, pName);
-
-				m_aClients[ClientID].m_State = CClient::STATE_CONNECTING;
-				m_aClients[ClientID].m_isSpectator = isSpecator ? true : false;
+					strncpy(m_aClients[ClientID].m_aPass, "", MAX_NAME_LENGTH);
+				}
 
 				SendMap(ClientID);
 			}
@@ -1714,7 +1727,7 @@ int CServer::Run()
 	}
 
 	// Close file descriptors for TMS files.
-	if(fclose(killEventsFile) == -1 || fclose(credentialFile) == -1)
+	if(Config()->m_Password[0] != 0 && fclose(killEventsFile) == -1)
 		dbg_msg("tournament", "ERROR: Failed to properly close required TMS files!");
 
 	return 0;
